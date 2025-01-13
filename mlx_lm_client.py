@@ -3,13 +3,21 @@ from tkinter import scrolledtext, messagebox
 import requests
 import threading
 import json
+from datetime import datetime
+
+def generate_unique_filename(prefix="file", extension="txt"):
+    # Get the current date and time
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    # Combine prefix, timestamp, and extension to form the filename
+    filename = f"{prefix}_{current_time}.{extension}"
+    return filename
 
 # Function to send the message and display it in the GUI
 def send_message(user_text_area):
     user_input = user_text_area.get("1.0", tk.END).strip()  # Get user input
     if user_input.strip():  # Ensure the input is not empty
         text_window.config(state=tk.NORMAL)
-        text_window.insert(tk.END, f"User: {user_input}")
+        text_window.insert(tk.END, f"\nUser: {user_input}")
         text_window.config(state=tk.DISABLED)
         text_window.see(tk.END)
         #user_text_area.delete(0, tk.END)  # Clear the entry widget
@@ -24,16 +32,16 @@ user = "User"
 system_sequence = f"Write the next replay in a chat between {char} and {user}"
 eot = "<|eot_id|>"
 input_prefix = "<|start_header_id|>Input: <|end_header_id|>\n\n"
-last_output_prefix = "<|start_header_id|>{char}: <|end_header_id|>\n\n"
+last_output_prefix = f"<|start_header_id|>{char}: <|end_header_id|>\n\n"
 global_chat_history = ""
+history_filename = generate_unique_filename('history', 'txt')
 
 def send_request(user_input):
     global global_chat_history
     if not global_chat_history:
-        prompt_text = f"{system_prefix}{system_sequence}{eot}{output_prefix}{eot}{input_prefix}{user_input}{eot}{last_output_prefix}"
+        global_chat_history += f"{system_prefix}{system_sequence}{eot}{output_prefix}{eot}{input_prefix}{user_input}{eot}{last_output_prefix}"
     else:
         global_chat_history += f"{input_prefix}{user_input}{eot}{last_output_prefix}"
-        prompt_text = global_chat_history
     payload = {
         "max_context_length": 32769,
         "max_tokens": 752,
@@ -68,7 +76,7 @@ def send_request(user_input):
         "penalty_alpha": 0,
         "length_penalty": 0,
         "early_stopping": False,
-        "prompt": prompt_text,
+        "prompt": global_chat_history,
         "stop_sequence": [eot],
     }
 
@@ -105,6 +113,8 @@ def send_request(user_input):
         text_window.config(state=tk.NORMAL)
         text_window.insert(tk.END, "\n")
         text_window.config(state=tk.DISABLED)
+        with open(history_filename,"w",encoding="utf8") as f:
+            f.write(global_chat_history)
 
     except requests.RequestException as e:
         text_window.config(state=tk.NORMAL)
@@ -129,6 +139,7 @@ text_window.grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
 # Create user input area
 user_text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, height=5)
 user_text_area.grid(row=1, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+user_text_area.bind("<Shift-Return>", lambda event: send_message(user_text_area))
 
 
 # Create send button
