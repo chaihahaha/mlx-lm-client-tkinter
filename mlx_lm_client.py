@@ -11,11 +11,12 @@ import configparser
 import sys
 import yaml
 import argparse
+import os
 
 class FileInterpolation(configparser.BasicInterpolation):
     def before_get(self, parser, section, option, value, defaults):
         # Check for custom file inclusion syntax
-        if value.startswith("%(file:") and value.endswith(")s"):
+        if value.startswith("%(file:") and value.endswith(")f"):
             file_path = value[7:-2]  # Extract the file path
             if os.path.exists(file_path):
                 with open(file_path, 'r') as file:
