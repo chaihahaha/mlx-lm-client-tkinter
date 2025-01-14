@@ -7,6 +7,41 @@ import requests
 import threading
 import json
 import time
+import configparser
+import sys
+import yaml
+import argparse
+
+class FileInterpolation(configparser.BasicInterpolation):
+    def before_get(self, parser, section, option, value, defaults):
+        # Check for custom file inclusion syntax
+        if value.startswith("%(file:") and value.endswith(")s"):
+            file_path = value[7:-2]  # Extract the file path
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as file:
+                    return file.read().strip()
+        
+        # Fall back to the default interpolation behavior
+        return super().before_get(parser, section, option, value, defaults)
+
+
+# Create the parser
+parser = argparse.ArgumentParser(description="MLX LLM client with tkinter")
+
+# Add positional arguments for the two filenames
+parser.add_argument("--config_file", type=str, help="config.ini to set chat template")
+parser.add_argument("--param_file", type=str, help="param.yaml to set sampling params")
+
+# Parse the arguments
+args = parser.parse_args()
+
+# Load configuration from file
+config = configparser.ConfigParser(interpolation=FileInterpolation())
+config.read(args.config_file)
+
+# Update locals() with the config dictionary
+locals().update(dict(config['INSTRUCT']))
+autoscroll = False
 
 # Function to send the message and display it in the GUI
 def send_message(user_text_area):
@@ -21,62 +56,21 @@ def send_message(user_text_area):
         
         threading.Thread(target=send_request, args=(user_input,)).start()  # Call the function to send the request
 
-system_prefix = "<|start_header_id|>Instruction: <|end_header_id|>\n\n"
-output_prefix = "<|start_header_id|>Response: <|end_header_id|>\n\n"
-char = "Assistant"
-user = "User"
-system_sequence = f"Write the next replay in a chat between {char} and {user}"
-eot = "<|eot_id|>"
-input_prefix = "<|start_header_id|>Input: <|end_header_id|>\n\n"
-last_output_prefix = f"<|start_header_id|>{char}: <|end_header_id|>\n\n"
-global_chat_history = ""
 history_filename = f'history-{time.time()}.txt'
-autoscroll = False
 
 def send_request(user_input):
     global global_chat_history
     global autoscroll
     if not global_chat_history:
-        global_chat_history += f"{system_prefix}{system_sequence}{eot}{output_prefix}{eot}{input_prefix}{user_input}{eot}{last_output_prefix}"
+        global_chat_history += f"{system_prefix}{system_sequence}{system_suffix}{output_prefix}{output_suffix}{input_prefix}{user_input}{input_suffix}{last_output_prefix}"
     else:
-        global_chat_history += f"{input_prefix}{user_input}{eot}{last_output_prefix}"
+        global_chat_history += f"{input_prefix}{user_input}{input_suffix}{last_output_prefix}"
     payload = {
-        "max_context_length": 32769,
-        "max_tokens": 752,
-        "stream": True,
-        "repetition_penalty": 1.08,
-        "repetition_penalty_range": 14,
-        "temperature": 0.8,
-        "tfs": 1,
-        "top_a": 0.04,
-        "top_p": 0.9,
-        "top_k": 43,
-        "typical_p": 1,
-        "min_p": 0,
-        "smoothing_factor": 0,
-        "seed": -1,
-        "dynatemp_base": 1,
-        "mirostat": 0,
-        "mirostat_tau": 4.99,
-        "mirostat_eta": 0,
-        "epsilon_cutoff": 0,
-        "eta_cutoff": 0,
-        "min_length": 37,
-        "no_repeat_ngram_size": 0,
-        "guidance_scale": 0.01,
-        "use_default_badwordids": False,
-        "add_bos_token": True,
-        "skip_special_tokens": False,
-        "do_sample": False,
-        "grammar": "",
-        "negative_prompt": "",
-        "num_beams": 2,
-        "penalty_alpha": 0,
-        "length_penalty": 0,
-        "early_stopping": False,
         "prompt": global_chat_history,
-        "stop_sequence": [eot],
+        "stop_sequence": [stop_sequence],
     }
+    with open(args.param_file,'r') as f:
+        payload.update(yaml.safe_load(f))
 
     try:
         response = requests.post("http://192.168.8.228:8080/v1/completions", json=payload, stream=True)
@@ -110,7 +104,7 @@ def send_request(user_input):
                     pass
                 root.update()
 
-        global_chat_history += f"{response_text}{eot}"
+        global_chat_history += f"{response_text}{stop_sequence}"
         # Finalize GUI response with a newline
         text_window.config(state=tk.NORMAL)
         text_window.insert(tk.END, "\n")
@@ -142,7 +136,7 @@ def disable_autoscroll(event):
 
 # Create main Tkinter window
 root = tk.Tk()
-root.title("Chat with LLM")
+root.title("Chat with MLX LLM")
 root.geometry("800x600")  # Set an initial window size
 
 # Configure grid layout
