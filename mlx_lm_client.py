@@ -1,16 +1,12 @@
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
+from tkinter.font import Font
+from tkinter import PanedWindow, Text, Scrollbar, VERTICAL, HORIZONTAL, WORD, BOTH, Y, RIGHT, LEFT, X, YES
+
 import requests
 import threading
 import json
-from datetime import datetime
-
-def generate_unique_filename(prefix="file", extension="txt"):
-    # Get the current date and time
-    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    # Combine prefix, timestamp, and extension to form the filename
-    filename = f"{prefix}_{current_time}.{extension}"
-    return filename
+import time
 
 # Function to send the message and display it in the GUI
 def send_message(user_text_area):
@@ -23,7 +19,7 @@ def send_message(user_text_area):
         #user_text_area.delete(0, tk.END)  # Clear the entry widget
         user_text_area.delete("1.0", tk.END)  # Clear the text area
         
-        send_request(user_input)  # Call the function to send the request
+        threading.Thread(target=send_request, args=(user_input,)).start()  # Call the function to send the request
 
 system_prefix = "<|start_header_id|>Instruction: <|end_header_id|>\n\n"
 output_prefix = "<|start_header_id|>Response: <|end_header_id|>\n\n"
@@ -34,10 +30,12 @@ eot = "<|eot_id|>"
 input_prefix = "<|start_header_id|>Input: <|end_header_id|>\n\n"
 last_output_prefix = f"<|start_header_id|>{char}: <|end_header_id|>\n\n"
 global_chat_history = ""
-history_filename = generate_unique_filename('history', 'txt')
+history_filename = f'history-{time.time()}.txt'
+autoscroll = False
 
 def send_request(user_input):
     global global_chat_history
+    global autoscroll
     if not global_chat_history:
         global_chat_history += f"{system_prefix}{system_sequence}{eot}{output_prefix}{eot}{input_prefix}{user_input}{eot}{last_output_prefix}"
     else:
@@ -102,7 +100,11 @@ def send_request(user_input):
                         text_window.config(state=tk.NORMAL)
                         text_window.insert(tk.END, text)
                         text_window.config(state=tk.DISABLED)
-                        text_window.see(tk.END)
+                        if text_window.yview()[1] == 1.0:
+                            # if scrollbar at bottom
+                            enable_autoscroll()
+                        if autoscroll:
+                            text_window.see(tk.END)
                 except json.JSONDecodeError:
                     # Handle potential malformed JSON
                     pass
@@ -121,6 +123,22 @@ def send_request(user_input):
         text_window.insert(tk.END, f"Error: {e}\n")
         text_window.config(state=tk.DISABLED)
 
+def change_font_size(event):
+    widget = event.widget  # Get the widget that triggered the event
+    current_font = Font(font=widget.cget("font"))
+    new_size = current_font.actual()["size"] + (1 if event.delta > 0 else -1)
+    new_size = max(8, new_size)  # Ensure the font size doesn't go below 8
+    widget.configure(font=(current_font.actual()["family"], new_size))
+
+def enable_autoscroll():
+    global autoscroll
+    autoscroll = True
+    return
+
+def disable_autoscroll(event):
+    global autoscroll
+    autoscroll = False
+    return
 
 # Create main Tkinter window
 root = tk.Tk()
@@ -128,22 +146,57 @@ root.title("Chat with LLM")
 root.geometry("800x600")  # Set an initial window size
 
 # Configure grid layout
-root.grid_rowconfigure(0, weight=1)  # Chat history expands vertically
-root.grid_rowconfigure(1, weight=1)  # User input expands vertically
+root.grid_rowconfigure(0, weight=1)  # Row 0 paned window
+root.grid_rowconfigure(1, weight=0)  # Row 1 button fixed
 root.grid_columnconfigure(0, weight=1)  # Widgets expand horizontally
 
-# Create chat history display
-text_window = scrolledtext.ScrolledText(root, wrap=tk.WORD, state=tk.DISABLED)
-text_window.grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
 
-# Create user input area
-user_text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, height=5)
-user_text_area.grid(row=1, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+# Create a PanedWindow for a draggable separator
+paned_window = PanedWindow(root, orient=tk.VERTICAL)
+paned_window.grid(row=0, column=0, sticky="nsew")  # Row 0, Column 0
+
+# Chat history section (top pane)
+chat_frame = tk.Frame(paned_window)
+text_window = Text(chat_frame, wrap=WORD)
+text_scroll = Scrollbar(chat_frame, orient=VERTICAL, command=text_window.yview)
+text_window.config(yscrollcommand=text_scroll.set)
+
+text_window.bind("<MouseWheel>", disable_autoscroll)
+text_window.bind("<Control-MouseWheel>", change_font_size)
+
+# Pack the Text widget and Scrollbar
+text_window.pack(side=LEFT, fill=BOTH, expand=1)
+text_scroll.pack(side=RIGHT, fill=Y)
+
+# Add the chat frame to the PanedWindow
+paned_window.add(chat_frame)
+
+# User input section (bottom pane)
+input_frame = tk.Frame(paned_window)
+user_text_area = Text(input_frame, wrap=WORD)
+user_text_scroll = Scrollbar(input_frame, orient=VERTICAL, command=user_text_area.yview)
+user_text_area.config(yscrollcommand=user_text_scroll.set)
+
+# Pack the Text widget and Scrollbar
+user_text_area.pack(side=LEFT, fill=BOTH, expand=1)
+user_text_scroll.pack(side=RIGHT, fill=Y)
+
 user_text_area.bind("<Shift-Return>", lambda event: send_message(user_text_area))
+# Bind mouse wheel event to change font size
+user_text_area.bind("<Control-MouseWheel>", change_font_size)
+user_text_area.pack(expand=True, fill='both')
 
+# Add the input frame to the PanedWindow
+paned_window.add(input_frame)
 
+# Allow the separator to be draggable
+paned_window.paneconfigure(chat_frame, stretch="always")
+paned_window.paneconfigure(input_frame, stretch="always")
+
+button_container = tk.Frame(root)
+button_container.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
 # Create send button
-send_button = tk.Button(root, text="Send", command=lambda: send_message(user_text_area))
-send_button.grid(row=2, column=1, padx=10, pady=5, sticky="e")
-root.mainloop()
+send_button = tk.Button(button_container, text="Send", command=lambda: send_message(user_text_area))
+send_button.pack(side=RIGHT, fill=X)  # Fill the container horizontally
 
+root.mainloop()
