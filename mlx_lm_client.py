@@ -74,7 +74,7 @@ def send_request(user_input):
         payload.update(yaml.safe_load(f))
 
     try:
-        response = requests.post("http://192.168.8.228:8080/v1/completions", json=payload, stream=True)
+        response = requests.post(server_address, json=payload, stream=True)
         response.raise_for_status()
         response_text = ""
 
