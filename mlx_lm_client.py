@@ -223,6 +223,7 @@ paned_window.add(chat_frame)
 input_frame = tk.Frame(paned_window)
 user_text_area = Text(input_frame, wrap=WORD)
 user_text_scroll = Scrollbar(input_frame, orient=VERTICAL, command=user_text_area.yview)
+user_text_scroll.bind("<ButtonPress>", disable_autoscroll)
 user_text_area.config(yscrollcommand=user_text_scroll.set)
 
 # Pack the Text widget and Scrollbar
