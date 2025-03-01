@@ -8,7 +8,7 @@ grammar: ''
 guidance_scale: 0.01
 length_penalty: 0
 max_context_length: 32769
-max_tokens: 752
+max_tokens: 16384
 min_length: 37
 min_p: 0
 mirostat: 0
