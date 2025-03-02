@@ -56,7 +56,7 @@ for key in server_settings:
 for key in instruct_settings:
     should_be_token = instruct_config[key]
     if should_be_token and not should_be_token.endswith(" "):
-        instruct_config[key] = " "+should_be_token
+        instruct_config[key] = should_be_token+" "
 
 # Update locals() with the config dictionary
 locals().update(instruct_config)
