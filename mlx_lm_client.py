@@ -40,63 +40,36 @@ args = parser.parse_args()
 config = configparser.ConfigParser(interpolation=FileInterpolation())
 config.read(args.config_file)
 instruct_config = dict(config["INSTRUCT"])
+server_config = dict(config["SERVER"])
 
-# Assert config fields
-assert "system_prefix" in instruct_config.keys()
-assert "system_suffix" in instruct_config.keys()
-assert "input_prefix" in instruct_config.keys()
-assert "input_suffix" in instruct_config.keys()
-assert "output_prefix" in instruct_config.keys()
-assert "output_suffix" in instruct_config.keys()
-assert "char" in instruct_config.keys()
-assert "user" in instruct_config.keys()
-assert "system_sequence" in instruct_config.keys()
-assert "stop_sequence" in instruct_config.keys()
-assert "last_output_prefix" in instruct_config.keys()
-assert "global_chat_history" in instruct_config.keys()
-assert "server_address" in instruct_config.keys()
+instruct_settings = ["system_prefix", "system_suffix", "input_prefix", "input_suffix", "output_prefix", "output_suffix", "char", "user", "system_sequence", "stop_sequence", "last_output_prefix"]
+server_settings = ["global_chat_history", "server_address"]
+
+# Assert instruct config fields
+for key in instruct_settings:
+    assert key in instruct_config
+
+# Assert server config fields
+for key in server_settings:
+    assert key in server_config
+
+for key in instruct_settings:
+    should_be_token = instruct_config[key]
+    if should_be_token and not should_be_token.endswith(" "):
+        instruct_config[key] = " "+should_be_token
 
 # Update locals() with the config dictionary
 locals().update(instruct_config)
+locals().update(server_config)
 autoscroll = False
 
 params = dict()
 with open(args.param_file,'r') as f:
     params.update(yaml.safe_load(f))
 
-assert "add_bos_token" in params.keys()
-assert "do_sample" in params.keys()
-assert "dynatemp_base" in params.keys()
-assert "early_stopping" in params.keys()
-assert "epsilon_cutoff" in params.keys()
-assert "eta_cutoff" in params.keys()
-assert "grammar" in params.keys()
-assert "guidance_scale" in params.keys()
-assert "length_penalty" in params.keys()
-assert "max_context_length" in params.keys()
-assert "max_tokens" in params.keys()
-assert "min_length" in params.keys()
-assert "min_p" in params.keys()
-assert "mirostat" in params.keys()
-assert "mirostat_eta" in params.keys()
-assert "mirostat_tau" in params.keys()
-assert "negative_prompt" in params.keys()
-assert "no_repeat_ngram_size" in params.keys()
-assert "num_beams" in params.keys()
-assert "penalty_alpha" in params.keys()
-assert "repetition_penalty" in params.keys()
-assert "repetition_penalty_range" in params.keys()
-assert "seed" in params.keys()
-assert "skip_special_tokens" in params.keys()
-assert "smoothing_factor" in params.keys()
-assert "stream" in params.keys()
-assert "temperature" in params.keys()
-assert "tfs" in params.keys()
-assert "top_a" in params.keys()
-assert "top_k" in params.keys()
-assert "top_p" in params.keys()
-assert "typical_p" in params.keys()
-assert "use_default_badwordids" in params.keys()
+param_names = ["add_bos_token", "do_sample", "dynatemp_base", "early_stopping", "epsilon_cutoff", "eta_cutoff", "grammar", "guidance_scale", "length_penalty", "max_context_length", "max_tokens", "min_length", "min_p", "mirostat", "mirostat_eta", "mirostat_tau", "negative_prompt", "no_repeat_ngram_size", "num_beams", "penalty_alpha", "repetition_penalty", "repetition_penalty_range", "seed", "skip_special_tokens", "smoothing_factor", "stream", "temperature", "tfs", "top_a", "top_k", "top_p", "typical_p", "use_default_badwordids"]
+for key in param_names:
+    assert key in params.keys()
 
 # Function to send the message and display it in the GUI
 def send_message(user_text_area):
