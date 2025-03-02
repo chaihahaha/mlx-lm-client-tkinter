@@ -55,8 +55,8 @@ for key in server_settings:
 
 for key in instruct_settings:
     should_be_token = instruct_config[key]
-    if should_be_token and not should_be_token.endswith(" "):
-        instruct_config[key] = should_be_token+" "
+    #if should_be_token and not should_be_token.endswith(" "):
+    #    instruct_config[key] = should_be_token+" "
 
 # Update locals() with the config dictionary
 locals().update(instruct_config)
@@ -90,12 +90,12 @@ def send_request(user_input):
     global global_chat_history
     global autoscroll
     if not global_chat_history:
-        global_chat_history += f"{system_prefix}{system_sequence}{system_suffix}{output_prefix}{output_suffix}{input_prefix}{user_input}{input_suffix}{last_output_prefix}"
+        global_chat_history += f"{system_prefix} {system_sequence} {system_suffix} {output_prefix} {output_suffix} {input_prefix} {user_input} {input_suffix} {last_output_prefix}\n"
     else:
-        global_chat_history += f"{input_prefix}{user_input}{input_suffix}{last_output_prefix}"
+        global_chat_history += f"{input_prefix} {user_input} {input_suffix} {last_output_prefix}\n"
     payload = {
         "prompt": global_chat_history,
-        "stop_sequence": [stop_sequence],
+        "stop": [stop_sequence],
     }
     payload.update(params)
 
