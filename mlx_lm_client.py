@@ -19,8 +19,8 @@ class FileInterpolation(configparser.BasicInterpolation):
         if value.startswith("%(file:") and value.endswith(")f"):
             file_path = value[7:-2]  # Extract the file path
             if os.path.exists(file_path):
-                with open(file_path, 'r') as file:
-                    return file.read(encoding='utf8').strip()
+                with open(file_path, 'r', encoding='utf8') as file:
+                    return file.read().strip()
         
         # Fall back to the default interpolation behavior
         return super().before_get(parser, section, option, value, defaults)
