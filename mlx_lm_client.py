@@ -20,7 +20,7 @@ class FileInterpolation(configparser.BasicInterpolation):
             file_path = value[7:-2]  # Extract the file path
             if os.path.exists(file_path):
                 with open(file_path, 'r') as file:
-                    return file.read().strip()
+                    return file.read(encoding='utf8').strip()
         
         # Fall back to the default interpolation behavior
         return super().before_get(parser, section, option, value, defaults)
@@ -38,7 +38,7 @@ args = parser.parse_args()
 
 # Load configuration from file
 config = configparser.ConfigParser(interpolation=FileInterpolation())
-config.read(args.config_file)
+config.read(args.config_file, encoding='utf8')
 instruct_config = dict(config["INSTRUCT"])
 server_config = dict(config["SERVER"])
 
