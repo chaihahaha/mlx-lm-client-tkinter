@@ -7,67 +7,53 @@ import requests
 import threading
 import json
 import time
-import configparser
 import sys
-import yaml
 import argparse
 import os
-
-class FileInterpolation(configparser.BasicInterpolation):
-    def before_get(self, parser, section, option, value, defaults):
-        # Check for custom file inclusion syntax
-        if value.startswith("%(file:") and value.endswith(")f"):
-            file_path = value[7:-2]  # Extract the file path
-            if os.path.exists(file_path):
-                with open(file_path, 'r', encoding='utf8') as file:
-                    return file.read().strip()
-        
-        # Fall back to the default interpolation behavior
-        return super().before_get(parser, section, option, value, defaults)
-
+import jinja2
 
 # Create the parser
 parser = argparse.ArgumentParser(description="MLX LLM client with tkinter")
 
-# Add positional arguments for the two filenames
-parser.add_argument("--config_file", type=str, help="config.ini to set chat template")
-parser.add_argument("--param_file", type=str, help="param.yaml to set sampling params")
+# Add positional arguments for the three filenames
+parser.add_argument("--config_file", type=str, help="config.json to set chat template")
+parser.add_argument("--param_file", type=str, help="param.json to set sampling params")
+parser.add_argument("--history_file", default="", type=str, help="history.json to set history chat context")
+
+autoscroll = False
 
 # Parse the arguments
 args = parser.parse_args()
 
-# Load configuration from file
-config = configparser.ConfigParser(interpolation=FileInterpolation())
-config.read(args.config_file, encoding='utf8')
-instruct_config = dict(config["INSTRUCT"])
-server_config = dict(config["SERVER"])
+# Load configuration file
+with open(args.config_file, "r", encoding="utf8") as f:
+    config = json.load(f)
 
-instruct_settings = ["system_prefix", "system_suffix", "input_prefix", "input_suffix", "output_prefix", "output_suffix", "char", "user", "system_sequence", "stop_sequence", "last_output_prefix"]
-server_settings = ["global_chat_history", "server_address"]
+settings = ["char", "user", "system_sequence", "stop_sequence", "last_output_prefix", "chat_template", "server_address"]
 
-# Assert instruct config fields
-for key in instruct_settings:
-    assert key in instruct_config
-
-# Assert server config fields
-for key in server_settings:
-    assert key in server_config
-
-for key in instruct_settings:
-    should_be_token = instruct_config[key]
+# Assert config fields
+for key in settings:
+    assert key in config
 
 # Update locals() with the config dictionary
-locals().update(instruct_config)
-locals().update(server_config)
-autoscroll = False
+locals().update(config)
+jinja2_chat_template = jinja2.Template(chat_template)
 
-params = dict()
-with open(args.param_file,'r') as f:
-    params.update(yaml.safe_load(f))
+# Load parameter file
+with open(args.param_file, "r", encoding="utf8") as f:
+    params = json.load(f)
 
 param_names = ["add_bos_token", "do_sample", "dynatemp_base", "early_stopping", "epsilon_cutoff", "eta_cutoff", "grammar", "guidance_scale", "length_penalty", "max_context_length", "max_tokens", "min_length", "min_p", "mirostat", "mirostat_eta", "mirostat_tau", "negative_prompt", "no_repeat_ngram_size", "num_beams", "penalty_alpha", "repetition_penalty", "repetition_penalty_range", "seed", "skip_special_tokens", "smoothing_factor", "stream", "temperature", "tfs", "top_a", "top_k", "top_p", "typical_p", "use_default_badwordids"]
 for key in param_names:
     assert key in params.keys()
+
+# Load history file
+if not os.path.isfile(args.history_file):
+    global_chat_history = []
+else:
+    with open(args.history_file, "r") as f:
+        global_chat_history = json.load(f)
+history_filename = f'history-{time.time()}.txt'
 
 # Function to send the message and display it in the GUI
 def send_message(user_text_area):
@@ -82,20 +68,31 @@ def send_message(user_text_area):
         
         threading.Thread(target=send_request, args=(user_input,)).start()  # Call the function to send the request
 
-history_filename = f'history-{time.time()}.txt'
 
 def send_request(user_input):
     global global_chat_history
     global autoscroll
+
+    # Initialize chat history if it's empty
     if not global_chat_history:
-        global_chat_history += f"{system_prefix}{system_sequence}{system_suffix}{output_prefix}{output_suffix}{input_prefix}{user_input}{input_suffix}{last_output_prefix}\n"
-    else:
-        global_chat_history += f"{input_prefix}{user_input}{input_suffix}{last_output_prefix}\n"
+        global_chat_history = {
+            "messages": [
+                {"role": "system", "content": f"{system_sequence}"}
+            ]
+        }
+    
+    # Add user message
+    global_chat_history["messages"].append({
+        "role": "user",
+        "content": user_input
+    })
+
     payload = {
-        "prompt": global_chat_history,
+        "prompt": jinja2_chat_template.render(global_chat_history) + last_output_prefix,
         "stop": [stop_sequence],
     }
     payload.update(params)
+    print("\npayload#####################\n", payload, "\npayload#####################\n")
 
     try:
         response = requests.post(server_address, json=payload, stream=True)
@@ -129,13 +126,18 @@ def send_request(user_input):
                     pass
                 root.update()
 
-        global_chat_history += f"{response_text}{stop_sequence}"
+        # Add assistant message to chat history
+        global_chat_history["messages"].append({
+            "role": "assistant",
+            "content": response_text
+        })
+        print("\nhistory#####################\n", global_chat_history, "\nhistory#####################\n")
         # Finalize GUI response with a newline
         text_window.config(state=tk.NORMAL)
         text_window.insert(tk.END, "\n")
         text_window.config(state=tk.DISABLED)
         with open(history_filename,"w",encoding="utf8") as f:
-            f.write(global_chat_history)
+            json.dump(global_chat_history, f, indent=2)
 
     except requests.RequestException as e:
         text_window.config(state=tk.NORMAL)
