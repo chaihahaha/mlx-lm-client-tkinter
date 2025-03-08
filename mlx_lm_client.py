@@ -184,6 +184,7 @@ text_window.config(yscrollcommand=text_scroll.set)
 
 text_window.bind("<MouseWheel>", disable_autoscroll)
 text_window.bind("<Control-MouseWheel>", change_font_size)
+text_window.bind("<Up>", disable_autoscroll)
 text_scroll.bind("<ButtonPress>", disable_autoscroll)
 
 # Pack the Text widget and Scrollbar
@@ -220,5 +221,12 @@ button_container.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
 # Create send button
 send_button = tk.Button(button_container, text="Send", command=lambda: send_message(user_text_area))
 send_button.pack(side=RIGHT, fill=X)  # Fill the container horizontally
+
+def on_closing():
+    print("Window is closing...")
+    root.destroy()  # Close the window
+    sys.exit()
+
+root.protocol("WM_DELETE_WINDOW", on_closing)
 
 root.mainloop()
