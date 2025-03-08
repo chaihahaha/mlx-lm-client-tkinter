@@ -11,6 +11,7 @@ import sys
 import argparse
 import os
 import jinja2
+import pyperclip
 
 # Create the parser
 parser = argparse.ArgumentParser(description="MLX LLM client with tkinter")
@@ -92,7 +93,6 @@ def send_request(user_input):
         "stop": [stop_sequence],
     }
     payload.update(params)
-    print("\npayload#####################\n", payload, "\npayload#####################\n")
 
     try:
         response = requests.post(server_address, json=payload, stream=True)
@@ -131,7 +131,6 @@ def send_request(user_input):
             "role": "assistant",
             "content": response_text
         })
-        print("\nhistory#####################\n", global_chat_history, "\nhistory#####################\n")
         # Finalize GUI response with a newline
         text_window.config(state=tk.NORMAL)
         text_window.insert(tk.END, "\n")
@@ -161,6 +160,46 @@ def disable_autoscroll(event):
     autoscroll = False
     return
 
+def copy_text(text_widget):
+    try:
+        text = text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
+        pyperclip.copy(text)
+    except:
+        messagebox.showwarning("Warning", "No text selected to copy")
+
+def cut_text(text_widget):
+    try:
+        text = text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
+        pyperclip.copy(text)
+        text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
+    except:
+        messagebox.showwarning("Warning", "No text selected to cut")
+
+def paste_text(text_widget):
+    text = pyperclip.paste()
+    try:
+        text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
+    except:
+        print("Warning: no text selected, skip delete")
+    finally:
+        text_widget.insert(tk.INSERT, text)
+
+def delete_text(text_widget):
+    try:
+        text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
+    except:
+        messagebox.showwarning("Warning", "No text selected to delete")
+
+def show_context_menu(event):
+    menu = tk.Menu(root, tearoff=0)
+    menu.add_command(label="Cut", command=lambda: cut_text(event.widget))
+    menu.add_command(label="Copy", command=lambda: copy_text(event.widget))
+    menu.add_command(label="Paste", command=lambda: paste_text(event.widget))
+    menu.add_command(label="Delete", command=lambda: delete_text(event.widget))
+    
+    # Display the menu at the mouse position
+    menu.post(event.x_root, event.y_root)
+
 # Create main Tkinter window
 root = tk.Tk()
 root.title("Chat with MLX LLM")
@@ -178,13 +217,17 @@ paned_window.grid(row=0, column=0, sticky="nsew")  # Row 0, Column 0
 
 # Chat history section (top pane)
 chat_frame = tk.Frame(paned_window)
-text_window = Text(chat_frame, wrap=WORD)
+text_window = Text(chat_frame, wrap=WORD, state=tk.DISABLED)
 text_scroll = Scrollbar(chat_frame, orient=VERTICAL, command=text_window.yview)
 text_window.config(yscrollcommand=text_scroll.set)
 
 text_window.bind("<MouseWheel>", disable_autoscroll)
 text_window.bind("<Control-MouseWheel>", change_font_size)
 text_window.bind("<Up>", disable_autoscroll)
+
+# Add right-click bindings to both text windows
+text_window.bind("<Button-3>", show_context_menu)
+
 text_scroll.bind("<ButtonPress>", disable_autoscroll)
 
 # Pack the Text widget and Scrollbar
@@ -207,6 +250,7 @@ user_text_scroll.pack(side=RIGHT, fill=Y)
 user_text_area.bind("<Shift-Return>", lambda event: send_message(user_text_area))
 # Bind mouse wheel event to change font size
 user_text_area.bind("<Control-MouseWheel>", change_font_size)
+user_text_area.bind("<Button-3>", show_context_menu)
 user_text_area.pack(expand=True, fill='both')
 
 # Add the input frame to the PanedWindow
@@ -224,7 +268,7 @@ send_button.pack(side=RIGHT, fill=X)  # Fill the container horizontally
 
 def on_closing():
     print("Window is closing...")
-    root.destroy()  # Close the window
+    root.after(2, root.destroy)  # Close the window
     sys.exit()
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
