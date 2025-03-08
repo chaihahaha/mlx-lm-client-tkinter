@@ -8,5 +8,5 @@ mlx_lm.server --host 0.0.0.0 --model /path/to/llm --cache-limit-gb 10 --use-defa
 ```
 On client computer with Python installed
 ```
-python mlx_lm_client.py --config_file config.ini --param_file params.yaml
+python mlx_lm_client.py --config_file config.json --param_file params.json
 ```
