@@ -226,7 +226,10 @@ text_window.bind("<Control-MouseWheel>", change_font_size)
 text_window.bind("<Up>", disable_autoscroll)
 
 # Add right-click bindings to both text windows
-text_window.bind("<Button-3>", show_context_menu)
+if sys.platform == "darwin":  # macOS
+    text_window.bind("<Button-2>", show_context_menu)
+else:  # Windows/Linux
+    text_window.bind("<Button-3>", show_context_menu)
 
 text_scroll.bind("<ButtonPress>", disable_autoscroll)
 
@@ -250,7 +253,10 @@ user_text_scroll.pack(side=RIGHT, fill=Y)
 user_text_area.bind("<Shift-Return>", lambda event: send_message(user_text_area))
 # Bind mouse wheel event to change font size
 user_text_area.bind("<Control-MouseWheel>", change_font_size)
-user_text_area.bind("<Button-3>", show_context_menu)
+if sys.platform == "darwin":  # macOS
+    user_text_area.bind("<Button-2>", show_context_menu)
+else:  # Windows/Linux
+    user_text_area.bind("<Button-3>", show_context_menu)
 user_text_area.pack(expand=True, fill='both')
 
 # Add the input frame to the PanedWindow
