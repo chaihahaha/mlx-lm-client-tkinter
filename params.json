@@ -29,7 +29,7 @@
   "tfs": 1,
   "top_a": 0.04,
   "top_k": 40,
-  "top_p": 0.1,
+  "top_p": 0.6,
   "typical_p": 1,
   "use_default_badwordids": false
 }
