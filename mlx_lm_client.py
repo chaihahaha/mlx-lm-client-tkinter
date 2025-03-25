@@ -61,7 +61,8 @@ def send_message(user_text_area):
     user_input = user_text_area.get("1.0", tk.END).strip()  # Get user input
     if user_input.strip():  # Ensure the input is not empty
         text_window.config(state=tk.NORMAL)
-        text_window.insert(tk.END, f"\nUser: {user_input}")
+        insert_highlighted_text(text_window, f"\n{user}: ")
+        text_window.insert(tk.END, user_input)
         text_window.config(state=tk.DISABLED)
         text_window.see(tk.END)
         #user_text_area.delete(0, tk.END)  # Clear the entry widget
@@ -69,6 +70,13 @@ def send_message(user_text_area):
         
         threading.Thread(target=send_request, args=(user_input,)).start()  # Call the function to send the request
 
+def insert_highlighted_text(text_widget, new_text):
+    insert_index = text_widget.index(tk.INSERT)
+    text_widget.insert(insert_index, new_text)
+    start_index = insert_index
+    end_index = text_widget.index(f"{insert_index} + {len(new_text)}c")
+    text_widget.tag_add("highlight", start_index, end_index)
+    text_widget.see(tk.END)
 
 def send_request(user_input):
     global global_chat_history
@@ -100,7 +108,7 @@ def send_request(user_input):
         response_text = ""
 
         text_window.config(state=tk.NORMAL)
-        text_window.insert(tk.END, f"\n{char}: ")
+        insert_highlighted_text(text_window, f"\n{char}: ")
         text_window.config(state=tk.DISABLED)
         text_window.see(tk.END)
 
@@ -205,6 +213,7 @@ paned_window.grid(row=0, column=0, sticky="nsew")  # Row 0, Column 0
 # Chat history section (top pane)
 chat_frame = tk.Frame(paned_window)
 text_window = Text(chat_frame, wrap=WORD)
+text_window.tag_configure("highlight", foreground="red", font=tk.font.Font(weight="bold"))
 text_window.bind("<Key>", lambda e: None)  # Block all keypresses
 text_scroll = Scrollbar(chat_frame, orient=VERTICAL, command=text_window.yview)
 text_window.config(yscrollcommand=text_scroll.set)
@@ -212,6 +221,12 @@ text_window.config(yscrollcommand=text_scroll.set)
 text_window.bind("<MouseWheel>", disable_autoscroll)
 text_window.bind("<Control-MouseWheel>", change_font_size)
 text_window.bind("<Up>", disable_autoscroll)
+if "messages" in global_chat_history:
+    for chat in global_chat_history["messages"]:
+        role, content = chat["role"], chat["content"]
+        insert_highlighted_text(text_window, f"\n{role}: ")
+        text_window.insert(tk.END, content)
+        text_window.see(tk.END)
 
 # Add right-click bindings to both text windows
 if sys.platform == "darwin":  # macOS
