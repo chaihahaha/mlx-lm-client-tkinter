@@ -217,7 +217,8 @@ paned_window.grid(row=0, column=0, sticky="nsew")  # Row 0, Column 0
 
 # Chat history section (top pane)
 chat_frame = tk.Frame(paned_window)
-text_window = Text(chat_frame, wrap=WORD, state=tk.DISABLED)
+text_window = Text(chat_frame, wrap=WORD)
+text_window.bind("<Key>", lambda e: "pass")  # Block all keypresses
 text_scroll = Scrollbar(chat_frame, orient=VERTICAL, command=text_window.yview)
 text_window.config(yscrollcommand=text_scroll.set)
 
