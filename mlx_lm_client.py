@@ -161,34 +161,21 @@ def disable_autoscroll(event):
     return
 
 def copy_text(text_widget):
-    try:
-        text = text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
-        pyperclip.copy(text)
-    except:
-        messagebox.showwarning("Warning", "No text selected to copy")
+    text = text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
+    pyperclip.copy(text)
 
 def cut_text(text_widget):
-    try:
-        text = text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
-        pyperclip.copy(text)
-        text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
-    except:
-        messagebox.showwarning("Warning", "No text selected to cut")
+    text = text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
+    pyperclip.copy(text)
+    text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
 
 def paste_text(text_widget):
     text = pyperclip.paste()
-    try:
-        text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
-    except:
-        print("Warning: no text selected, skip delete")
-    finally:
-        text_widget.insert(tk.INSERT, text)
+    text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
+    text_widget.insert(tk.INSERT, text)
 
 def delete_text(text_widget):
-    try:
-        text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
-    except:
-        messagebox.showwarning("Warning", "No text selected to delete")
+    text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
 
 def show_context_menu(event):
     menu = tk.Menu(root, tearoff=0)
@@ -218,7 +205,7 @@ paned_window.grid(row=0, column=0, sticky="nsew")  # Row 0, Column 0
 # Chat history section (top pane)
 chat_frame = tk.Frame(paned_window)
 text_window = Text(chat_frame, wrap=WORD)
-text_window.bind("<Key>", lambda e: "pass")  # Block all keypresses
+text_window.bind("<Key>", lambda e: None)  # Block all keypresses
 text_scroll = Scrollbar(chat_frame, orient=VERTICAL, command=text_window.yview)
 text_window.config(yscrollcommand=text_scroll.set)
 
