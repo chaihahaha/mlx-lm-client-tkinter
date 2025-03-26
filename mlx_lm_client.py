@@ -71,7 +71,8 @@ def send_message(user_text_area):
         threading.Thread(target=send_request, args=(user_input,)).start()  # Call the function to send the request
 
 def insert_highlighted_text(text_widget, new_text):
-    insert_index = text_widget.index(tk.END)
+    text_widget.mark_set(tk.INSERT, tk.END)
+    insert_index = text_widget.index(tk.INSERT)
     text_widget.insert(insert_index, new_text)
     start_index = insert_index
     end_index = text_widget.index(f"{insert_index} + {len(new_text)}c")
