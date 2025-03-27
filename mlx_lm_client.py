@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import scrolledtext, messagebox
 from tkinter.font import Font
 from tkinter import PanedWindow, Text, Scrollbar, VERTICAL, HORIZONTAL, WORD, BOTH, Y, RIGHT, LEFT, X, YES
-
+import traceback
 import requests
 import threading
 import json
@@ -13,6 +13,18 @@ import os
 import jinja2
 import pyperclip
 
+def insert_to_readonly(text_window, newtext, highlight=False, autoscroll=True):
+    text_window.config(state=tk.NORMAL)
+    if highlight:
+        insert_highlighted_text(text_window, newtext)
+    else:
+        text_window.insert(tk.END, newtext)
+    text_window.config(state=tk.DISABLED)
+    if autoscroll:
+        text_window.see(tk.END)
+    return
+
+
 # Create the parser
 parser = argparse.ArgumentParser(description="MLX LLM client with tkinter")
 
@@ -21,7 +33,7 @@ parser.add_argument("--config_file", type=str, help="config.json to set chat tem
 parser.add_argument("--param_file", type=str, help="param.json to set sampling params")
 parser.add_argument("--history_file", default="", type=str, help="history.json to set history chat context")
 
-autoscroll = False
+global_autoscroll = False
 
 # Parse the arguments
 args = parser.parse_args()
@@ -60,12 +72,8 @@ history_filename = f'history-{time.time()}.txt'
 def send_message(user_text_area):
     user_input = user_text_area.get("1.0", tk.END).strip()  # Get user input
     if user_input.strip():  # Ensure the input is not empty
-        text_window.config(state=tk.NORMAL)
-        insert_highlighted_text(text_window, f"\n{user}: ")
-        text_window.insert(tk.END, user_input)
-        text_window.config(state=tk.DISABLED)
-        text_window.see(tk.END)
-        #user_text_area.delete(0, tk.END)  # Clear the entry widget
+        insert_to_readonly(text_window, f"\n{user}: ", highlight=True)
+        insert_to_readonly(text_window, user_input, highlight=False)
         user_text_area.delete("1.0", tk.END)  # Clear the text area
         
         threading.Thread(target=send_request, args=(user_input,)).start()  # Call the function to send the request
@@ -81,7 +89,7 @@ def insert_highlighted_text(text_widget, new_text):
 
 def send_request(user_input):
     global global_chat_history
-    global autoscroll
+    global global_autoscroll
 
     # Initialize chat history if it's empty
     if not global_chat_history:
@@ -108,10 +116,7 @@ def send_request(user_input):
         response.raise_for_status()
         response_text = ""
 
-        text_window.config(state=tk.NORMAL)
-        insert_highlighted_text(text_window, f"\n{char}: ")
-        text_window.config(state=tk.DISABLED)
-        text_window.see(tk.END)
+        insert_to_readonly(text_window, f"\n{char}: ", highlight=True)
 
         for chunk in response.iter_lines(decode_unicode=True):
             if chunk.startswith("data: "):  # Handle only JSON lines
@@ -122,17 +127,13 @@ def send_request(user_input):
                         text = choice.get("text", "")
                         response_text += text
                         # Update GUI in real-time
-                        text_window.config(state=tk.NORMAL)
-                        text_window.insert(tk.END, text)
-                        text_window.config(state=tk.DISABLED)
+                        insert_to_readonly(text_window, text, highlight=False, autoscroll=global_autoscroll)
                         if text_window.yview()[1] == 1.0:
                             # if scrollbar at bottom
                             enable_autoscroll()
-                        if autoscroll:
-                            text_window.see(tk.END)
-                except json.JSONDecodeError:
-                    # Handle potential malformed JSON
-                    pass
+                except Exception:
+                    traceback.print_exc()
+                    exit()
                 root.update()
 
         # Add assistant message to chat history
@@ -141,16 +142,12 @@ def send_request(user_input):
             "content": response_text
         })
         # Finalize GUI response with a newline
-        text_window.config(state=tk.NORMAL)
-        text_window.insert(tk.END, "\n")
-        text_window.config(state=tk.DISABLED)
+        insert_to_readonly(text_window, "\n")
         with open(history_filename,"w",encoding="utf8") as f:
             json.dump(global_chat_history, f, indent=2)
 
     except requests.RequestException as e:
-        text_window.config(state=tk.NORMAL)
-        text_window.insert(tk.END, f"Error: {e}\n")
-        text_window.config(state=tk.DISABLED)
+        insert_to_readonly(text_window, f"\nError: {e}\n")
 
 def change_font_size(event):
     widget = event.widget  # Get the widget that triggered the event
@@ -160,13 +157,13 @@ def change_font_size(event):
     widget.configure(font=(current_font.actual()["family"], new_size))
 
 def enable_autoscroll():
-    global autoscroll
-    autoscroll = True
+    global global_autoscroll
+    global_autoscroll = True
     return
 
 def disable_autoscroll(event):
-    global autoscroll
-    autoscroll = False
+    global global_autoscroll
+    global_autoscroll = False
     return
 
 def copy_text(text_widget):
@@ -213,9 +210,8 @@ paned_window.grid(row=0, column=0, sticky="nsew")  # Row 0, Column 0
 
 # Chat history section (top pane)
 chat_frame = tk.Frame(paned_window)
-text_window = Text(chat_frame, wrap=WORD)
+text_window = Text(chat_frame, wrap=WORD, state=tk.DISABLED)
 text_window.tag_configure("highlight", foreground="red", font=tk.font.Font(weight="bold"))
-text_window.bind("<Key>", lambda e: None)  # Block all keypresses
 text_scroll = Scrollbar(chat_frame, orient=VERTICAL, command=text_window.yview)
 text_window.config(yscrollcommand=text_scroll.set)
 
@@ -225,9 +221,8 @@ text_window.bind("<Up>", disable_autoscroll)
 if "messages" in global_chat_history:
     for chat in global_chat_history["messages"]:
         role, content = chat["role"], chat["content"]
-        insert_highlighted_text(text_window, f"\n{role}: ")
-        text_window.insert(tk.END, content)
-        text_window.see(tk.END)
+        insert_to_readonly(text_window, f"\n{role}: ", highlight=True)
+        insert_to_readonly(text_window, content)
 
 # Add right-click bindings to both text windows
 if sys.platform == "darwin":  # macOS
