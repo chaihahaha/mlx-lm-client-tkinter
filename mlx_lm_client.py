@@ -124,6 +124,8 @@ def send_request(user_input):
         for chunk in response.iter_lines(decode_unicode=True):
             if chunk.startswith("data: "):  # Handle only JSON lines
                 chunk_data = chunk[6:]  # Remove the "data: " prefix
+                if "[DONE]" in chunk_data:
+                    continue
                 try:
                     parsed_data = json.loads(chunk_data)
                     for choice in parsed_data.get("choices", []):

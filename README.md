@@ -10,3 +10,4 @@ On client computer with Python installed
 ```
 python mlx_lm_client.py --config_file config.json --param_file params.json
 ```
+TODO: VLM, commandline
