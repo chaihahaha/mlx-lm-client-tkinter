@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
 from tkinter.font import Font
-from tkinter import PanedWindow, Text, Scrollbar, VERTICAL, HORIZONTAL, WORD, BOTH, Y, RIGHT, LEFT, X, YES
+from tkinter import PanedWindow, Text, Scrollbar, VERTICAL, HORIZONTAL, WORD, BOTH, Y, RIGHT, LEFT, X, YES, simpledialog
 import traceback
 import requests
 import threading
@@ -233,6 +233,224 @@ def show_context_menu(event):
     # Display the menu at the mouse position
     menu.post(event.x_root, event.y_root)
 
+#class TextLineNumbers(tk.Canvas):
+#    def __init__(self, *args, **kwargs):
+#        tk.Canvas.__init__(self, *args, **kwargs)
+#        self.textwidget = None
+#
+#    def attach(self, text_widget):
+#        self.textwidget = text_widget
+#        
+#    def redraw(self, *args):
+#        self.delete("all")
+#        
+#        i = self.textwidget.index("@0,0")  # First visible line
+#        while True:
+#            dline = self.textwidget.dlineinfo(i)
+#            if not dline: break
+#            y = dline[1]
+#            linenum = str(i).split('.')[0]  # Line number as string
+#            self.create_text(2, y, anchor="nw", text=linenum,
+#                            fill='blue')  # Blue color
+#            i = self.textwidget.index("%s+1line" %i)
+
+class TextLineNumbers(tk.Canvas):
+    def __init__(self, *args, **kwargs):
+        tk.Canvas.__init__(self, *args, **kwargs)
+        self.textwidget = None
+        self.font = tk.font.Font(family="Monospace", size=10)  # Monospace font
+
+    def attach(self, text_widget):
+        self.textwidget = text_widget
+        
+    def redraw(self, *args):
+        self.delete("all")
+        if not self.textwidget: return
+        
+        i = self.textwidget.index("@0,0")
+        max_line = 0  # Track maximum line number width
+        while True:
+            dline = self.textwidget.dlineinfo(i)
+            if not dline: break
+            y = dline[1]
+            linenum = str(i).split('.')[0]
+            
+            # Calculate text width
+            text_width = self.font.measure(linenum + " ")
+            max_line = max(max_line, text_width)
+            
+            # Draw text aligned to right edge
+            self.create_text(self.winfo_width()-5, y, 
+                           anchor="ne", text=linenum,
+                           font=self.font, fill='blue')
+            i = self.textwidget.index("%s+1line" % i)
+        
+        # Set canvas width to maximum line number width + padding
+        self.config(width=max_line + 10)
+
+class CustomText(tk.Text):
+    def __init__(self, *args, **kwargs):
+        tk.Text.__init__(self, *args, **kwargs)
+
+        # create a proxy for the underlying widget
+        self._orig = self._w + "_orig"
+        self.tk.call("rename", self._w, self._orig)
+        self.tk.createcommand(self._w, self._proxy)
+
+        # search state
+        self.search_query = None
+        self.search_pos = "1.0"
+
+    def _proxy(self, *args):
+        # let the actual widget perform the requested action
+        cmd = (self._orig,) + args
+        result = self.tk.call(cmd)
+
+        # generate an event if something was added or deleted,
+        # or the cursor position changed
+        if (args[0] in ("insert", "replace", "delete") or 
+            args[0:3] == ("mark", "set", "insert") or
+            args[0:2] == ("xview", "moveto") or
+            args[0:2] == ("xview", "scroll") or
+            args[0:2] == ("yview", "moveto") or
+            args[0:2] == ("yview", "scroll")
+        ):
+            self.event_generate("<<Change>>", when="tail")
+
+        # return what the actual widget returned
+        return result  
+
+def switch_text_areas(event):
+    if root.focus_get() == user_text_area:
+        text_window.focus_set()
+    else:
+        user_text_area.focus_set()
+    return "break"
+
+#def search(event):
+#    widget = event.widget
+#    query = simpledialog.askstring("Search", "Enter text:")
+#    
+#    if not query:
+#        return
+#    
+#    widget.tag_remove('found', '1.0', tk.END)
+#    
+#    idx = "1.0"
+#    while True:
+#        pos_start = widget.search(query, idx, stopindex=tk.END)
+#        
+#        if not pos_start:
+#            break
+#        pos_end = f"{pos_start}+{len(query)}c"
+#        
+#        widget.tag_add("found", pos_start, pos_end)
+#        idx = pos_end
+#        
+#    if not widget.search(query, "1.0", stopindex=tk.END):
+#        messagebox.showinfo("Search result","Text not found")
+#        
+#    widget.tag_configure('found', background='yellow')
+
+## Modified search function
+#def search(event):
+#    widget = event.widget
+#    query = simpledialog.askstring("Search", "Enter text:", parent=widget)
+#    
+#    if not query:
+#        return
+#    
+#    widget.search_query = query
+#    widget.search_pos = "1.0"
+#    widget.search_wrapped = False
+#    _search_next(widget, query)
+#
+#def _search_next(widget, query=None):
+#    if query is None or not query:
+#        return
+#
+#    widget.tag_remove('found', '1.0', tk.END)
+#    widget.tag_remove('current_match', '1.0', tk.END)
+#    
+#    pos_start = widget.search(query, widget.search_pos, 
+#                            stopindex=tk.END, nocase=True)
+#    
+#    if pos_start:
+#        pos_end = f"{pos_start}+{len(query)}c"
+#        widget.tag_add("found", pos_start, pos_end)
+#        widget.tag_add("current_match", pos_start, pos_end)
+#        widget.see(pos_start)
+#        widget.search_pos = pos_end
+#        widget.tag_config('current_match', background='orange')
+#    else:
+#        if widget.search_pos != "1.0":
+#            widget.search_pos = "1.0"
+#            _search_next(widget, query)
+#        else:
+#            messagebox.showinfo("Search", "No more matches")
+
+def search(event=None, widget=None):
+    # Handle both event-based and direct calls
+    if event is not None:
+        widget = event.widget
+    elif widget is None:
+        return
+    
+    query = simpledialog.askstring("Search", "Enter text:", parent=widget)
+    
+    if not query:
+        return
+    
+    # Initialize search state
+    widget.search_query = query
+    widget.search_pos = "1.0"
+    widget.search_wrapped = False
+    _search_next(widget=widget)
+
+def _search_next(widget=None, from_keybind=False):
+    if widget is None:
+        return
+    
+    if not hasattr(widget, 'search_query') or not widget.search_query:
+        if from_keybind:
+            search(widget=widget)  # Direct call without event
+        return
+    
+    widget.tag_remove('found', '1.0', tk.END)
+    widget.tag_remove('current_match', '1.0', tk.END)
+
+    start_pos = widget.search_pos
+
+    # TODO: this search will crash with zsh bus error when ctrl-g is pressed to frequently, why?
+    pos_start = widget.search(widget.search_query, start_pos,
+                            stopindex=tk.END, nocase=True)
+
+    if pos_start:
+        # Found match
+        pos_end = f"{pos_start}+{len(widget.search_query)}c"
+        widget.tag_add("found", pos_start, pos_end)
+        widget.tag_add("current_match", pos_start, pos_end)
+        widget.see(pos_start)
+        widget.search_pos = pos_end
+        widget.search_wrapped = False
+    else:
+        print('no more matches')
+        # No match found - wrap around
+        if not widget.search_wrapped:
+            print('not wrapped')
+            widget.search_pos = "1.0"
+            widget.search_wrapped = True
+            _search_next(widget)
+        else:
+            print('show no nore matches')
+            messagebox.showinfo("Search", "No more matches")
+            widget.search_pos = "1.0"
+            widget.search_wrapped = False
+            return
+
+    widget.tag_config('current_match', background='orange')
+    widget.tag_config('found', background='yellow')
+
 # Create main Tkinter window
 root = tk.Tk()
 root.title("Chat with MLX LLM")
@@ -250,14 +468,24 @@ paned_window.grid(row=0, column=0, sticky="nsew")  # Row 0, Column 0
 
 # Chat history section (top pane)
 chat_frame = tk.Frame(paned_window)
-text_window = Text(chat_frame, wrap=WORD, state=tk.DISABLED)
+linenumbers_chat = TextLineNumbers(chat_frame, width=10)
+
+text_window = CustomText(chat_frame, wrap=WORD, state=tk.DISABLED)
 text_window.tag_configure("highlight", foreground="red", font=tk.font.Font(weight="bold"))
-text_scroll = Scrollbar(chat_frame, orient=VERTICAL, command=text_window.yview)
+text_scroll = Scrollbar(chat_frame, orient=VERTICAL, command=text_window.yview, takefocus=0)
 text_window.config(yscrollcommand=text_scroll.set)
 
 text_window.bind("<MouseWheel>", disable_autoscroll)
 text_window.bind("<Control-MouseWheel>", change_font_size)
 text_window.bind("<Up>", disable_autoscroll)
+
+text_window_on_change = lambda event: linenumbers_chat.redraw()
+text_window.bind("<<Change>>", text_window_on_change)
+text_window.bind("<<Configure>>", text_window_on_change)
+linenumbers_chat.attach(text_window)
+linenumbers_chat.pack(side=LEFT, fill=Y, expand=True)
+linenumbers_chat.redraw()
+
 if "messages" in global_chat_history:
     for chat in global_chat_history["messages"]:
         role, content = chat["role"], chat["content"]
@@ -273,7 +501,7 @@ else:  # Windows/Linux
 text_scroll.bind("<ButtonPress>", disable_autoscroll)
 
 # Pack the Text widget and Scrollbar
-text_window.pack(side=LEFT, fill=BOTH, expand=1)
+text_window.pack(side=LEFT, fill=BOTH, expand=True)
 text_scroll.pack(side=RIGHT, fill=Y)
 
 # Add the chat frame to the PanedWindow
@@ -282,7 +510,7 @@ paned_window.add(chat_frame)
 # User input section (bottom pane)
 input_frame = tk.Frame(paned_window)
 user_text_area = Text(input_frame, wrap=WORD)
-user_text_scroll = Scrollbar(input_frame, orient=VERTICAL, command=user_text_area.yview)
+user_text_scroll = Scrollbar(input_frame, orient=VERTICAL, command=user_text_area.yview, takefocus=0)
 user_text_area.config(yscrollcommand=user_text_scroll.set)
 
 # Pack the Text widget and Scrollbar
@@ -310,6 +538,13 @@ button_container.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
 # Create send button
 send_button = tk.Button(button_container, text="Send", command=lambda: send_message(user_text_area))
 send_button.pack(side=RIGHT, fill=X)  # Fill the container horizontally
+
+text_window.bind("<Control-Shift-Tab>", switch_text_areas)
+user_text_area.bind("<Control-Shift-Tab>", switch_text_areas)
+#text_window.bind("<Control-g>", lambda e: _search_next(text_window, text_window.search_query))
+# Update bindings to use widget parameter directly
+text_window.bind("<Control-g>", lambda e: _search_next(widget=text_window, from_keybind=True))
+text_window.bind("<Control-f>", lambda e: search(event=e))
 
 def on_closing():
     print("Window is closing...")
