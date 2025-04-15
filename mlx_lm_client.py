@@ -233,27 +233,6 @@ def show_context_menu(event):
     # Display the menu at the mouse position
     menu.post(event.x_root, event.y_root)
 
-#class TextLineNumbers(tk.Canvas):
-#    def __init__(self, *args, **kwargs):
-#        tk.Canvas.__init__(self, *args, **kwargs)
-#        self.textwidget = None
-#
-#    def attach(self, text_widget):
-#        self.textwidget = text_widget
-#        
-#    def redraw(self, *args):
-#        self.delete("all")
-#        
-#        i = self.textwidget.index("@0,0")  # First visible line
-#        while True:
-#            dline = self.textwidget.dlineinfo(i)
-#            if not dline: break
-#            y = dline[1]
-#            linenum = str(i).split('.')[0]  # Line number as string
-#            self.create_text(2, y, anchor="nw", text=linenum,
-#                            fill='blue')  # Blue color
-#            i = self.textwidget.index("%s+1line" %i)
-
 class TextLineNumbers(tk.Canvas):
     def __init__(self, *args, **kwargs):
         tk.Canvas.__init__(self, *args, **kwargs)
@@ -280,7 +259,7 @@ class TextLineNumbers(tk.Canvas):
             max_line = max(max_line, text_width)
             
             # Draw text aligned to right edge
-            self.create_text(self.winfo_width()-5, y, 
+            self.create_text(max_line + 5, y, 
                            anchor="ne", text=linenum,
                            font=self.font, fill='blue')
             i = self.textwidget.index("%s+1line" % i)
@@ -290,6 +269,7 @@ class TextLineNumbers(tk.Canvas):
 
 class CustomText(tk.Text):
     def __init__(self, *args, **kwargs):
+        self.search_in_progress = False
         tk.Text.__init__(self, *args, **kwargs)
 
         # create a proxy for the underlying widget
@@ -327,68 +307,6 @@ def switch_text_areas(event):
         user_text_area.focus_set()
     return "break"
 
-#def search(event):
-#    widget = event.widget
-#    query = simpledialog.askstring("Search", "Enter text:")
-#    
-#    if not query:
-#        return
-#    
-#    widget.tag_remove('found', '1.0', tk.END)
-#    
-#    idx = "1.0"
-#    while True:
-#        pos_start = widget.search(query, idx, stopindex=tk.END)
-#        
-#        if not pos_start:
-#            break
-#        pos_end = f"{pos_start}+{len(query)}c"
-#        
-#        widget.tag_add("found", pos_start, pos_end)
-#        idx = pos_end
-#        
-#    if not widget.search(query, "1.0", stopindex=tk.END):
-#        messagebox.showinfo("Search result","Text not found")
-#        
-#    widget.tag_configure('found', background='yellow')
-
-## Modified search function
-#def search(event):
-#    widget = event.widget
-#    query = simpledialog.askstring("Search", "Enter text:", parent=widget)
-#    
-#    if not query:
-#        return
-#    
-#    widget.search_query = query
-#    widget.search_pos = "1.0"
-#    widget.search_wrapped = False
-#    _search_next(widget, query)
-#
-#def _search_next(widget, query=None):
-#    if query is None or not query:
-#        return
-#
-#    widget.tag_remove('found', '1.0', tk.END)
-#    widget.tag_remove('current_match', '1.0', tk.END)
-#    
-#    pos_start = widget.search(query, widget.search_pos, 
-#                            stopindex=tk.END, nocase=True)
-#    
-#    if pos_start:
-#        pos_end = f"{pos_start}+{len(query)}c"
-#        widget.tag_add("found", pos_start, pos_end)
-#        widget.tag_add("current_match", pos_start, pos_end)
-#        widget.see(pos_start)
-#        widget.search_pos = pos_end
-#        widget.tag_config('current_match', background='orange')
-#    else:
-#        if widget.search_pos != "1.0":
-#            widget.search_pos = "1.0"
-#            _search_next(widget, query)
-#        else:
-#            messagebox.showinfo("Search", "No more matches")
-
 def search(event=None, widget=None):
     # Handle both event-based and direct calls
     if event is not None:
@@ -410,6 +328,10 @@ def search(event=None, widget=None):
 def _search_next(widget=None, from_keybind=False):
     if widget is None:
         return
+    if widget.search_in_progress:
+        return
+
+    widget.search_in_progress = True
     
     if not hasattr(widget, 'search_query') or not widget.search_query:
         if from_keybind:
@@ -451,8 +373,11 @@ def _search_next(widget=None, from_keybind=False):
     widget.tag_config('current_match', background='orange')
     widget.tag_config('found', background='yellow')
 
+    widget.search_in_progress = False
+
 # Create main Tkinter window
 root = tk.Tk()
+root.grid_columnconfigure(0, weight=1)
 root.title("Chat with MLX LLM")
 root.geometry("800x600")  # Set an initial window size
 
@@ -468,7 +393,10 @@ paned_window.grid(row=0, column=0, sticky="nsew")  # Row 0, Column 0
 
 # Chat history section (top pane)
 chat_frame = tk.Frame(paned_window)
+chat_frame.grid_rowconfigure(0, weight=1)
+chat_frame.grid_columnconfigure(1, weight=1)
 linenumbers_chat = TextLineNumbers(chat_frame, width=10)
+linenumbers_chat.grid(row=0, column=0, sticky="ns")
 
 text_window = CustomText(chat_frame, wrap=WORD, state=tk.DISABLED)
 text_window.tag_configure("highlight", foreground="red", font=tk.font.Font(weight="bold"))
@@ -483,9 +411,8 @@ text_window_on_change = lambda event: linenumbers_chat.redraw()
 text_window.bind("<<Change>>", text_window_on_change)
 text_window.bind("<<Configure>>", text_window_on_change)
 linenumbers_chat.attach(text_window)
-linenumbers_chat.pack(side=LEFT, fill=Y, expand=True)
-linenumbers_chat.redraw()
 
+text_window.grid(row=0, column=1, sticky="nsew")
 if "messages" in global_chat_history:
     for chat in global_chat_history["messages"]:
         role, content = chat["role"], chat["content"]
@@ -501,8 +428,7 @@ else:  # Windows/Linux
 text_scroll.bind("<ButtonPress>", disable_autoscroll)
 
 # Pack the Text widget and Scrollbar
-text_window.pack(side=LEFT, fill=BOTH, expand=True)
-text_scroll.pack(side=RIGHT, fill=Y)
+text_scroll.grid(row=0, column=2, sticky="ns")
 
 # Add the chat frame to the PanedWindow
 paned_window.add(chat_frame)
@@ -541,7 +467,6 @@ send_button.pack(side=RIGHT, fill=X)  # Fill the container horizontally
 
 text_window.bind("<Control-Shift-Tab>", switch_text_areas)
 user_text_area.bind("<Control-Shift-Tab>", switch_text_areas)
-#text_window.bind("<Control-g>", lambda e: _search_next(text_window, text_window.search_query))
 # Update bindings to use widget parameter directly
 text_window.bind("<Control-g>", lambda e: _search_next(widget=text_window, from_keybind=True))
 text_window.bind("<Control-f>", lambda e: search(event=e))
