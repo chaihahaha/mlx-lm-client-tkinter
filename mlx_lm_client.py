@@ -269,7 +269,6 @@ class TextLineNumbers(tk.Canvas):
 
 class CustomText(tk.Text):
     def __init__(self, *args, **kwargs):
-        self.search_in_progress = False
         tk.Text.__init__(self, *args, **kwargs)
 
         # create a proxy for the underlying widget
@@ -277,9 +276,10 @@ class CustomText(tk.Text):
         self.tk.call("rename", self._w, self._orig)
         self.tk.createcommand(self._w, self._proxy)
 
-        # search state
         self.search_query = None
         self.search_pos = "1.0"
+        self.search_active = False
+        self.search_wrapped = False
 
     def _proxy(self, *args):
         # let the actual widget perform the requested action
@@ -307,73 +307,62 @@ def switch_text_areas(event):
         user_text_area.focus_set()
     return "break"
 
+
 def search(event=None, widget=None):
-    # Handle both event-based and direct calls
-    if event is not None:
+    if widget is None:
         widget = event.widget
-    elif widget is None:
-        return
     
+    # Ask for search query
     query = simpledialog.askstring("Search", "Enter text:", parent=widget)
-    
     if not query:
         return
     
-    # Initialize search state
+    # Initialize new search
     widget.search_query = query
     widget.search_pos = "1.0"
     widget.search_wrapped = False
-    _search_next(widget=widget)
+    _search_next(widget, new_search=True)
 
-def _search_next(widget=None, from_keybind=False):
-    if widget is None:
-        return
-    if widget.search_in_progress:
-        return
-
-    widget.search_in_progress = True
-    
-    if not hasattr(widget, 'search_query') or not widget.search_query:
-        if from_keybind:
-            search(widget=widget)  # Direct call without event
+def _search_next(widget=None, new_search=False, event=None):
+    if widget is None or widget.search_active or not widget.search_query:
         return
     
-    widget.tag_remove('found', '1.0', tk.END)
-    widget.tag_remove('current_match', '1.0', tk.END)
+    widget.search_active = True
+    try:
+        widget.tag_remove('found', '1.0', tk.END)
+        widget.tag_remove('current_match', '1.0', tk.END)
 
-    start_pos = widget.search_pos
-
-    # TODO: this search will crash with zsh bus error when ctrl-g is pressed to frequently, why?
-    pos_start = widget.search(widget.search_query, start_pos,
-                            stopindex=tk.END, nocase=True)
-
-    if pos_start:
-        # Found match
-        pos_end = f"{pos_start}+{len(widget.search_query)}c"
-        widget.tag_add("found", pos_start, pos_end)
-        widget.tag_add("current_match", pos_start, pos_end)
-        widget.see(pos_start)
-        widget.search_pos = pos_end
-        widget.search_wrapped = False
-    else:
-        print('no more matches')
-        # No match found - wrap around
-        if not widget.search_wrapped:
-            print('not wrapped')
-            widget.search_pos = "1.0"
-            widget.search_wrapped = True
-            _search_next(widget)
+        if new_search:
+            start_pos = "1.0"
         else:
-            print('show no nore matches')
-            messagebox.showinfo("Search", "No more matches")
-            widget.search_pos = "1.0"
+            start_pos = widget.search_pos
+
+        pos_start = widget.search(widget.search_query, start_pos,
+                                stopindex=tk.END, nocase=True)
+        
+        if pos_start:
+            # Found match
+            pos_end = f"{pos_start}+{len(widget.search_query)}c"
+            widget.tag_add("found", pos_start, pos_end)
+            widget.tag_add("current_match", pos_start, pos_end)
+            widget.see(pos_start)
+            widget.search_pos = pos_end
             widget.search_wrapped = False
-            return
+        else:
+            # No matches - wrap around if not already wrapped
+            if not widget.search_wrapped:
+                widget.search_wrapped = True
+                widget.search_pos = "1.0"
+                _search_next(widget, new_search=True)
+            else:
+                messagebox.showinfo("Search", "No more matches")
+                widget.search_pos = "1.0"
+                widget.search_wrapped = False
 
-    widget.tag_config('current_match', background='orange')
-    widget.tag_config('found', background='yellow')
-
-    widget.search_in_progress = False
+        widget.tag_config('current_match', background='orange')
+        widget.tag_config('found', background='yellow')
+    finally:
+        widget.search_active = False
 
 # Create main Tkinter window
 root = tk.Tk()
@@ -468,8 +457,8 @@ send_button.pack(side=RIGHT, fill=X)  # Fill the container horizontally
 text_window.bind("<Control-Shift-Tab>", switch_text_areas)
 user_text_area.bind("<Control-Shift-Tab>", switch_text_areas)
 # Update bindings to use widget parameter directly
-text_window.bind("<Control-g>", lambda e: _search_next(widget=text_window, from_keybind=True))
-text_window.bind("<Control-f>", lambda e: search(event=e))
+text_window.bind("<Control-g>", lambda e: _search_next(widget=text_window))
+text_window.bind("<Control-f>", lambda e: search(widget=text_window))
 
 def on_closing():
     print("Window is closing...")
