@@ -15,6 +15,8 @@ import pyperclip
 import tempfile
 import matplotlib.pyplot as plt
 import re
+import webbrowser
+import html
 
 def insert_to_readonly(text_window, newtext, highlight=False, autoscroll=True):
     text_window.config(state=tk.NORMAL)
@@ -188,39 +190,76 @@ def paste_text(text_widget):
 def delete_text(text_widget):
     text_widget.delete(tk.SEL_FIRST, tk.SEL_LAST)
 
-def render_latex(text_widget):
-    selected_text = text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
-    cleaned_text = selected_text.replace('\n','')
-    cleaned_text = re.sub(r'^\$|\\[\[\]]|\$$', '', cleaned_text)
+def show_formula_browser(latex_formula):
+    """Open in system browser - guaranteed MathJax support"""
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+    MathJax = {{
+        tex: {{
+            inlineMath: [['$', '$']],
+            displayMath: [['$$', '$$']],
+            processEscapes: true
+        }},
+        svg: {{
+            fontCache: 'global'
+        }}
+    }};
+    </script>
+    <style>
+        body {{ 
+            font-family: Arial, sans-serif; 
+            margin: 40px;
+            background: #f5f5f5;
+        }}
+        .container {{ 
+            background: white; 
+            padding: 30px; 
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        .formula {{ 
+            font-size: 24px;
+            margin: 20px 0;
+            color: #333;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="formula">{latex_formula}</div>
+    </div>
+</body>
+</html>"""
+    
+    # Save to temporary file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+        f.write(html_content)
+        temp_file = f.name
+    
+    # Open in default browser
+    webbrowser.open(f'file://{temp_file}')
+    
+    # The file will be deleted when the program exits
+    return temp_file
+
+def render_latex_browser(text_widget):
+    """Render using system browser"""
     try:
-        fig = plt.figure(figsize=(5, 1))
-        plt.text(0.5, 0.5, f'${cleaned_text}$', size=20, ha='center', va='center')
-        plt.axis('off')
-
-        temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-        temp_file.close()
-        plt.savefig(temp_file.name, bbox_inches='tight', pad_inches=0.1)
-        plt.close(fig)
-
-        new_window = tk.Toplevel(root)
-        new_window.title("LaTeX Rendering")
-
-        img = tk.PhotoImage(file=temp_file.name)
-        label = tk.Label(new_window, image=img)
-        label.image = img  # Keep reference
-        label.pack()
-
-        def on_close():
-            try:
-                os.unlink(temp_file.name)
-            except Exception:
-                pass
-            new_window.destroy()
-        new_window.protocol("WM_DELETE_WINDOW", on_close)
-
+        selected_text = text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
+        #cleaned_text = selected_text.strip()
+        ## Remove surrounding delimiters if present
+        #cleaned_text = re.sub(r'^\$+|\$+$|^\\[\[\]]|\\[\[\]]$', '', cleaned_text)
+        #cleaned_text = cleaned_text.strip()
+        show_formula_browser(selected_text)
+        
     except Exception as e:
-        messagebox.showerror("LaTeX Error", f"Error rendering LaTeX: {str(e)}")
-    return
+        messagebox.showerror("Error", f"Error rendering LaTeX: {str(e)}")
 
 def show_context_menu(event):
     menu = tk.Menu(root, tearoff=0)
@@ -228,7 +267,7 @@ def show_context_menu(event):
     menu.add_command(label="Copy", command=lambda: copy_text(event.widget))
     menu.add_command(label="Paste", command=lambda: paste_text(event.widget))
     menu.add_command(label="Delete", command=lambda: delete_text(event.widget))
-    menu.add_command(label="Render", command=lambda: render_latex(event.widget))
+    menu.add_command(label="Render", command=lambda: render_latex_browser(event.widget))
     
     # Display the menu at the mouse position
     menu.post(event.x_root, event.y_root)
